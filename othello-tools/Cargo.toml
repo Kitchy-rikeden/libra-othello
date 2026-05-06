@@ -1,0 +1,16 @@
+[package]
+name = "libra-othello"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "libra_othello"
+path = "src/lib.rs"
+
+[[bin]]
+name = "othello-ai"
+path = "src/bin/othello-ai.rs"
+
+[[bin]]
+name = "othello-arena"
+path = "src/bin/othello-arena.rs"
