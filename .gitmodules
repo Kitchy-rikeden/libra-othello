@@ -1,0 +1,3 @@
+[submodule "libra-simulator"]
+	path = libra-simulator
+	url = git@github.com:Kitchy-rikeden/libra-simulator.git
