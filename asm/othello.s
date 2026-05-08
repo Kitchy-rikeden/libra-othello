@@ -31,7 +31,7 @@ START:
 // - '1' = -72 なので, 行番号 = 入力 + 73
 // - 'P' = -41
 // 
-// 遷移元: MY_TURN
+// 遷移元: SEARCH_OK (J)
 OPP_TURN:
     MOVI    B, 121
     LD      A, B        // MMIO in
@@ -58,9 +58,91 @@ OPP_PASS:
     STI     110         // OppPass = 1
     LD      C, B        // 改行読み飛ばし
 
+// 合法手を探して最初に見つかったものを選ぶ
 // 遷移元: OPP_TURN (thru)
 MY_TURN:
-//todo
+    LDI     A, 100      // A = MyColor
+    STI     103         // ApplyColor = MyColor
+    MOVI    C, 10       // C = pos
+
+// pos から始めて置けるかどうか試す
+// 遷移元: MY_TURN (thru), SEARCH_NEXT
+// 前提: C = pos, ApplyColor = MyColor
+SEARCH:
+    LD      A, C        // A = board[pos]
+    CMPI    0
+    JZ      SEARCH_TRY  // if (board[pos] == 0)
+    J       SEARCH_NEXT // else
+
+// pos が空きなので置いてみる.
+// 遷移元: SEARCH (JZ)
+// 前提: C = pos, ApplyColor = MyColor
+SEARCH_TRY:
+    CALL    APPLY       // C = pos
+    LDI     A, 102      // A = ApplyRes
+    CMPI    0
+    JZ      SEARCH_UNDO // if (ApplyRes == 0)
+
+// 置けたので出力する.
+// 遷移元: SEARCH_TRY (thru)
+// 前提: C = pos
+SEARCH_OK:
+    MOV     A, C        // A = pos
+    // pos = 9 * row + col から row と col を取り出す.
+    // col は 0~8 であるが、pos の下2桁は -4~4 のためそのままは取り出せない.
+    // pos-4 を考えると col-4 は -4~4 になり、上位3桁は row に一致する.
+    ADDI    A, -4       // A = pos - 4
+    SR      A
+    SR      A           // A = row
+    MOV     B, A        // B = row
+    SL      A
+    SL      A           // A = row * 9
+    SUB     A, C        // A = -col
+    NOT     A           // A = col
+    ADDI    A, -57      // col を 'A'-'H' に
+    MOVI    C, 121      // C = 121
+    ST      C           // MMIO out
+    MOV     A, B        // A = row
+    ADDI    A, -73      // row を '1'-'8' に
+    ST      C           // MMIO out
+    MOVI    A, -111     // A = '\n'
+    ST      C           // MMIO out
+    J       OPP_TURN
+
+// 置いてみた石が違法だったためキャンセル
+// 前提: A = 0, C = pos, ApplyColor = MyColor
+SEARCH_UNDO:
+    ST      C           // board[pos] = 0
+
+// 次の pos へ
+// 遷移元: SEARCH (JZ), SEARCH_NEXT (JZ), SEARCH_UNDO (thru)
+// 前提: C = pos, ApplyColor = MyColor
+SEARCH_NEXT:
+    MOV     A, C        // A = pos
+    CMPI    80
+    JZ      SEARCH_END  // if (pos == 80)
+    ADDI    C, 1        // C = pos + 1
+    MOV     A, C        // A = pos + 1
+    ANDI    A, 0t###11  // A &= 0t###11
+    CMPI    0t###00
+    JZ      SEARCH_NEXT // if ((pos+1) % 9 == 0) then +1 again
+    J       SEARCH
+
+// 合法手が見つからなかった
+// 遷移元: SEARCH_NEXT
+SEARCH_END:
+    MOVI    A, -41      // A = 'P'
+    STI     121         // MMIO out
+    MOVI    A, -111     // A = '\n'
+    STI     121         // MMIO out
+    LDI     A, 110      // A = OppPass
+    CMPI    0
+    JZ      OPP_TURN    // if (OppPass == 0)
+
+// 相手と自分が連続でパスしたため終了
+// 遷移元: SEARCH_END (thru)
+GAME_END:
+    HALT
 
 // function
 // 入力: A = row, B /k, C = col
@@ -74,11 +156,11 @@ MAKE_POS:
     RET
 
 // function
-// 石を置いてひっくり返す.
-// 入力: C = pos, ApplyColor,
+// 石を置いてひっくり返す. pos は空きマスという前提.
+// 入力: C = pos /keep, ApplyColor,
 // 出力: ApplyRes = (1つも返さなかったら0)
 //
-// 呼び出し元: OPP_TURN
+// 呼び出し元: OPP_TURN, SEARCH
 APPLY:
     SUB     A, A        // A = 0
     STI     102         // ApplyRes = 0
@@ -141,7 +223,7 @@ APPLY_UNDO:
     SUB     C, C        // C = dir
     J       APPLY_NEXT
 
-// 8方向の適用が終わった
+// 8方向の適用が終わった. 最後に石を置く.
 // 遷移元: APPLY_NEXT (JZ)
 APPLY_END:
     POP     C           // pop_1. C = pos
