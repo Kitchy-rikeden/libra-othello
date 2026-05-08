@@ -1,5 +1,5 @@
 // プロトコル:
-// - このプログラムは白 (1) として打つ. 相手は黒 (-1).
+// - このプログラムが先行(黒)なら'B', 後攻(白)なら'W' を最初に1行送る.
 // - 入力は相手の手を1行ずつ受け取る: D3 または P
 // - 出力は自分の手を1行ずつ返す: D3 または P
 //
@@ -14,16 +14,37 @@
 // 104: FlipColor
 // 110: OppPass
 
-// メモリは0で初期化されている前提で初期配置
-START:
+// メモリ初期化 (0 ~ 120)
+// C = pos
+    SUB     C, A    // C = 0
+CLEAR:
+    SUB     A, A    // A = 0
+    ST      C       // board[pos] = 0
+    MOV     A, C    // A = pos
+    CMPI    120
+    JZ      INIT    // if (pos == 89)
+    ADDI    C, 1    // C = pos + 1
+    J       CLEAR
+
+// 石の初期配置, 先攻後攻の決定
+INIT:
     MOVI    A, 1
     STI     40      // D4 白
     STI     50      // E5 白
-    STI     100     // MyColor = 1
     NOT     A
     STI     41      // E4 黒
     STI     49      // D5 黒
-    STI     101     // OppColor = -1
+    LDI     A, 121  // A = MMIO in
+    LDI     B, 121  // 改行読み飛ばし
+    ADDI    A, 35   // 'W' = -34 なら A = 1, 'B' = -55 なら A < 0
+    JP      INIT_L1 // if (A == 'W')
+    MOVI    A, -1   // A = MyColor
+INIT_L1:
+    STI     100     // MyColor = MyColor
+    NOT     A
+    STI     101     // OppColor = ~MyColor
+    CMPI    0
+    JP      MY_TURN // if (OppColor == 1)
 
 // 相手の手を読み, 盤面に反映. 合法手かチェックはしない
 // 重要な文字値:
@@ -31,7 +52,7 @@ START:
 // - '1' = -72 なので, 行番号 = 入力 + 73
 // - 'P' = -41
 // 
-// 遷移元: SEARCH_OK (J)
+// 遷移元: SEARCH_OK (J), INIT_L1 (thru)
 OPP_TURN:
     MOVI    B, 121
     LD      A, B        // MMIO in
@@ -59,7 +80,7 @@ OPP_PASS:
     LD      C, B        // 改行読み飛ばし
 
 // 合法手を探して最初に見つかったものを選ぶ
-// 遷移元: OPP_TURN (thru)
+// 遷移元: OPP_PASS (thru)
 MY_TURN:
     LDI     A, 100      // A = MyColor
     STI     103         // ApplyColor = MyColor
