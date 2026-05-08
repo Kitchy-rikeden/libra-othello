@@ -233,10 +233,13 @@ APPLY_FLIP:
     J       APPLY_NEXT
 
 // ひっくり返してみたがダメだったので元に戻す. 元の位置には必ず空きマスがあるはずなので, 逆向きにFlipする.
+// 止まったマスの1つ手前に戻ってからFLIPを実行
 // 遷移元: APPLY_FLIP (JZ)
 // 前提: A = 0, B = stopped pos, C = dir /keep
 APPLY_UNDO:
     SUB     C, C        // C = ~dir
+    MOV     A, B        // A = stopped pos
+    ADD     B, C        // B = stopped pos - dir ; 1個戻ったマス
     LDI     A, 103      // A = ApplyColor
     NOT     A           // A = ~ApplyColor
     STI     104         // FlipColor = ~ApplyColor
